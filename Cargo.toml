@@ -1,0 +1,25 @@
+[package]
+name = "oc2-hlapi"
+version = "0.1.0"
+authors = ["Factorial <27factorial@gmail.com>"]
+categories = ["api-bindings", "embedded", "os"]
+description = "Rust bindings for the OpenComputers II Minecraft mod's HLAPI"
+documentation = "https://docs.rs/oc2-hlapi"
+keywords = ["oc2", "opencomputers", "hlapi", "minecraft"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/27factorial/oc2-hlapi"
+edition = "2021"
+rust-version = "1.79"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+erased-serde = "0.3"
+serde_json = "1.0"
+mio = { version = "0.8", features = ["os-poll", "os-ext"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+termios = "0.3"
+arrayvec = { version = "0.7.4", features = ["std"] }
+thiserror = "1.0.61"

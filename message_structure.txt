@@ -1,0 +1,41 @@
+Messages to a device have the following format:
+
+MESSAGE_DELIMITER + {
+    "type": "list" | "methods" | "result" | "error" | "invoke",
+    "data": DATA_LAYOUT,
+} + MESSAGE_DELIMITER
+
+where
+    MESSAGE_DELIMITER = "\0"
+
+    DATA_LAYOUT =
+        if "type" == "list" -> [
+                          {
+                            "deviceId": <UUID>,
+                            "typeNames": [
+                              <string>,
+                              <string>,
+                              ...
+                            ]
+                          },
+                          ...
+                        ]
+        if "type" == "methods" -> [
+                          {
+                            "name": <string>,
+                            "returnType": <string>,
+                            "description": <string>,
+                            "parameters": [
+                              "name": <string>,
+                              "description": <string>,
+                              "type": <string>
+                            ]
+                          },
+                          {
+                            ...
+                          }
+                        ]
+
+        if "type" == "result" -> <any>
+        if "type" == "error"  -> <string>
+        if "type" == "invoke" -> After sending to the device, <any>

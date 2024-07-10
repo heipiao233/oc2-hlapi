@@ -1,0 +1,23 @@
+# Projects which use oc2-hlapi and intend to run in the OC2 VM should configure their system for
+# compiling to RISC-V and copy this config file and the build-riscv.sh file for convenience.
+
+[build]
+target = "riscv64gc-unknown-linux-musl"
+
+[unstable]
+# This option seems to be ignored sometimes for some reason, and that makes crates fail to 
+# cross-compile for RISC-V, hence the build-riscv.sh script to add this option to the cargo
+# invocation.
+build-std = ["core", "std", "alloc", "panic_abort"]
+
+[target.riscv64gc-unknown-linux-musl]
+rustflags = [
+    "-C",
+    "link-args=-lc",
+    "-C",
+    "prefer-dynamic",
+    "-C",
+    "target-feature=-crt-static",
+]
+linker = "riscv64-unknown-linux-musl-gcc"
+ar = "riscv64-unknown-linux-musl-ar"
