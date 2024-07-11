@@ -1,32 +1,27 @@
+use crate::call::ApiCall;
+use crate::types::{DeviceDescriptor, MethodDescriptor};
+use serde::de::{self, DeserializeOwned};
+use serde::Deserialize;
 use std::mem::MaybeUninit;
-
-use crate::{
-    call::ApiCall,
-    prelude::{DeviceDescriptor, MethodDescriptor},
-};
-use serde::{
-    de::{self, DeserializeOwned},
-    Deserialize,
-};
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize)]
 #[serde(rename_all = "lowercase", tag = "type", content = "data")]
-pub enum RpcResponse<T: ApiCall> {
+pub enum Response<T: ApiCall> {
     #[serde(alias = "list", alias = "methods", rename = "result")]
     Response(T::Response),
     Error(String),
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Deserialize)]
-pub struct ListResponse(pub Vec<DeviceDescriptor>);
+pub struct List(pub Vec<DeviceDescriptor>);
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Deserialize)]
-pub struct MethodsResponse(pub Vec<MethodDescriptor>);
+pub struct Methods(pub Vec<MethodDescriptor>);
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-pub struct InvokeResponse<R>(pub R);
+pub struct Return<R>(pub R);
 
-impl<'de, R: DeserializeOwned + 'static> Deserialize<'de> for InvokeResponse<R> {
+impl<'de, R: DeserializeOwned + 'static> Deserialize<'de> for Return<R> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -52,8 +47,8 @@ impl<'de, R: DeserializeOwned + 'static> Deserialize<'de> for InvokeResponse<R> 
         let opt: Option<R> = Deserialize::deserialize(deserializer)?;
 
         match opt {
-            Some(r) => Ok(InvokeResponse(r)),
-            None if std::mem::size_of::<R>() == 0 => Ok(InvokeResponse(zst())),
+            Some(r) => Ok(Return(r)),
+            None if std::mem::size_of::<R>() == 0 => Ok(Return(zst())),
             // We actually do expect the `data` field if the return type is not actually zero-sized.
             // If there's no `data` field when it was expected, that means something went wrong, and
             // not just that the call didn't return anything.
@@ -62,13 +57,13 @@ impl<'de, R: DeserializeOwned + 'static> Deserialize<'de> for InvokeResponse<R> 
     }
 }
 
-impl<T: ApiCall> From<RpcResponse<T>> for Result<T::Response, String> {
-    fn from(value: RpcResponse<T>) -> Self {
+impl<T: ApiCall> From<Response<T>> for Result<T::Response, String> {
+    fn from(value: Response<T>) -> Self {
         match value {
-            RpcResponse::Response(t) => Ok(t),
+            Response::Response(t) => Ok(t),
             // This branch should never get executed unless T is serialized to "null" in JSON. This
             // is the case with Option<T> and (), for example.
-            RpcResponse::Error(err) => Err(err),
+            Response::Error(err) => Err(err),
         }
     }
 }

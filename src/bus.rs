@@ -1,7 +1,7 @@
-use crate::call::{ApiCall, ListCall, RpcCall};
+use crate::call::{ApiCall, Call};
 use crate::device::RpcDevice;
 use crate::error::{Error, Result};
-use crate::response::{ListResponse, RpcResponse};
+use crate::response::{self, Response};
 use arrayvec::ArrayVec;
 use mio::unix::SourceFd;
 use mio::{Events, Interest, Poll, Token};
@@ -59,7 +59,7 @@ impl DeviceBus {
 
     /// Calls an RPC method. A convenience method for writing to the device bus and then reading an
     /// RPC value returned.
-    pub fn call<T: ApiCall + Serialize>(&self, call: RpcCall<T>) -> Result<RpcResponse<T>> {
+    pub fn call<T: ApiCall + Serialize>(&self, call: Call<T>) -> Result<Response<T>> {
         self.write_message(call)?;
         self.read_message()
     }
@@ -71,9 +71,9 @@ impl DeviceBus {
 
     /// Finds a device or module by its name.
     pub fn find_by_name<D: RpcDevice>(&self, name: &str) -> Result<Option<D>> {
-        let list_result = self.call::<ListCall>(RpcCall::list())?.into();
+        let list_result = self.call(Call::list())?.into();
 
-        let ListResponse(list) = match list_result {
+        let response::List(list) = match list_result {
             Ok(response) => response,
             Err(e) => return Err(e.into()),
         };
@@ -91,7 +91,7 @@ impl DeviceBus {
     }
 
     /// Writes an RPC message.
-    pub fn write_message<T: ApiCall + Serialize>(&self, message: RpcCall<T>) -> Result<()> {
+    pub fn write_message<T: ApiCall + Serialize>(&self, message: Call<T>) -> Result<()> {
         let mut write_buffer = const { ArrayVec::<_, MAX_MESSAGE_SIZE>::new_const() };
 
         write_buffer
@@ -110,7 +110,7 @@ impl DeviceBus {
     }
 
     /// Reads an RPC message.
-    pub fn read_message<T: ApiCall>(&self) -> Result<RpcResponse<T>> {
+    pub fn read_message<T: ApiCall>(&self) -> Result<Response<T>> {
         let mut read_buffer = const { ArrayVec::<_, MAX_MESSAGE_SIZE>::new_const() };
         let mut total_bytes = 0;
 

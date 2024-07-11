@@ -1,4 +1,4 @@
-use crate::response::{InvokeResponse, ListResponse, MethodsResponse};
+use crate::response;
 use erased_serde::Serialize as ErasedSerialize;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
@@ -11,15 +11,15 @@ pub trait ApiCall: sealed::Sealed {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct RpcCall<T>(T);
+pub struct Call<T>(T);
 
-impl<T: ApiCall + Serialize> RpcCall<T> {
+impl<T: ApiCall + Serialize> Call<T> {
     pub fn new(data: T) -> Self {
         Self(data)
     }
 }
 
-impl<T: ApiCall + Serialize> Serialize for RpcCall<T> {
+impl<T: ApiCall + Serialize> Serialize for Call<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -39,25 +39,25 @@ impl<T: ApiCall + Serialize> Serialize for RpcCall<T> {
     }
 }
 
-impl RpcCall<ListCall> {
+impl Call<List> {
     pub fn list() -> Self {
-        Self(ListCall)
+        Self(List)
     }
 }
 
-impl RpcCall<MethodsCall> {
+impl Call<Methods> {
     pub fn methods(device_id: uuid::Uuid) -> Self {
-        Self(MethodsCall { device_id })
+        Self(Methods { device_id })
     }
 }
 
-impl<'a, R: DeserializeOwned + 'static> RpcCall<InvokeCall<'a, R>> {
+impl<'a, R: DeserializeOwned + 'static> Call<Invoke<'a, R>> {
     pub fn invoke(
         device_id: uuid::Uuid,
         method_name: &'a str,
         parameters: &'a [&'a dyn ErasedSerialize],
     ) -> Self {
-        Self(InvokeCall {
+        Self(Invoke {
             device_id,
             name: method_name,
             parameters,
@@ -66,37 +66,29 @@ impl<'a, R: DeserializeOwned + 'static> RpcCall<InvokeCall<'a, R>> {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum RpcCallKind {
-    List,
-    Methods,
-    Invoke,
-}
-
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Serialize)]
-pub struct ListCall;
+pub struct List;
 
-impl ApiCall for ListCall {
+impl ApiCall for List {
     const KIND: &'static str = "list";
-    type Response = ListResponse;
+    type Response = response::List;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Serialize)]
 #[serde(transparent)]
-pub struct MethodsCall {
+pub struct Methods {
     #[serde(rename = "deviceId")]
     pub device_id: uuid::Uuid,
 }
 
-impl ApiCall for MethodsCall {
+impl ApiCall for Methods {
     const KIND: &'static str = "methods";
-    type Response = MethodsResponse;
+    type Response = response::Methods;
 }
 
 #[derive(Copy, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InvokeCall<'a, R> {
+pub struct Invoke<'a, R> {
     pub device_id: uuid::Uuid,
     pub name: &'a str,
     pub parameters: &'a [&'a dyn ErasedSerialize],
@@ -104,19 +96,19 @@ pub struct InvokeCall<'a, R> {
     _ret_value: PhantomData<fn() -> R>,
 }
 
-impl<R: DeserializeOwned + 'static> ApiCall for InvokeCall<'_, R> {
+impl<R: DeserializeOwned + 'static> ApiCall for Invoke<'_, R> {
     const KIND: &'static str = "invoke";
-    type Response = InvokeResponse<R>;
+    type Response = response::Return<R>;
 }
 
 mod sealed {
     use serde::de::DeserializeOwned;
 
-    use super::{InvokeCall, ListCall, MethodsCall};
+    use super::{Invoke, List, Methods};
 
     pub trait Sealed {}
 
-    impl Sealed for ListCall {}
-    impl Sealed for MethodsCall {}
-    impl<R: DeserializeOwned + 'static> Sealed for InvokeCall<'_, R> {}
+    impl Sealed for List {}
+    impl Sealed for Methods {}
+    impl<R: DeserializeOwned + 'static> Sealed for Invoke<'_, R> {}
 }
