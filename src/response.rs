@@ -1,8 +1,10 @@
 use crate::call::ApiCall;
+use crate::error::{Error, Result};
 use crate::types::{DeviceDescriptor, MethodDescriptor};
 use serde::de::{self, DeserializeOwned};
 use serde::Deserialize;
 use std::mem::MaybeUninit;
+use std::result::Result as StdResult;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Deserialize)]
 #[serde(rename_all = "lowercase", tag = "type", content = "data")]
@@ -22,7 +24,7 @@ pub struct Methods(pub Vec<MethodDescriptor>);
 pub struct Return<R>(pub R);
 
 impl<'de, R: DeserializeOwned + 'static> Deserialize<'de> for Return<R> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -57,13 +59,13 @@ impl<'de, R: DeserializeOwned + 'static> Deserialize<'de> for Return<R> {
     }
 }
 
-impl<T: ApiCall> From<Response<T>> for Result<T::Response, String> {
+impl<T: ApiCall> From<Response<T>> for Result<T::Response> {
     fn from(value: Response<T>) -> Self {
         match value {
             Response::Response(t) => Ok(t),
             // This branch should never get executed unless T is serialized to "null" in JSON. This
             // is the case with Option<T> and (), for example.
-            Response::Error(err) => Err(err),
+            Response::Error(e) => Err(Error::from(e)),
         }
     }
 }

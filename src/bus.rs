@@ -59,9 +59,9 @@ impl DeviceBus {
 
     /// Calls an RPC method. A convenience method for writing to the device bus and then reading an
     /// RPC value returned.
-    pub fn call<T: ApiCall + Serialize>(&self, call: Call<T>) -> Result<Response<T>> {
+    pub fn call<T: ApiCall + Serialize>(&self, call: Call<T>) -> Result<T::Response> {
         self.write_message(call)?;
-        self.read_message()
+        self.read_message::<T>()
     }
 
     /// Finds a device or module by its RpcDevice identifier.
@@ -71,12 +71,7 @@ impl DeviceBus {
 
     /// Finds a device or module by its name.
     pub fn find_by_name<D: RpcDevice>(&self, name: &str) -> Result<Option<D>> {
-        let list_result = self.call(Call::list())?.into();
-
-        let response::List(list) = match list_result {
-            Ok(response) => response,
-            Err(e) => return Err(e.into()),
-        };
+        let response::List(list) = self.call(Call::list())?;
 
         let device = list
             .iter()
@@ -106,21 +101,29 @@ impl DeviceBus {
 
         (&self.0.bus)
             .write_all(write_buffer.as_slice())
-            .map_err(Error::from)
+            .map_err(Error::from)?;
+
+        (&self.0.bus).flush()?;
+
+        Ok(())
     }
 
     /// Reads an RPC message.
-    pub fn read_message<T: ApiCall>(&self) -> Result<Response<T>> {
-        let mut read_buffer = const { ArrayVec::<_, MAX_MESSAGE_SIZE>::new_const() };
+    pub fn read_message<T: ApiCall>(&self) -> Result<T::Response> {
+        let mut read_buffer = const { [0u8; MAX_MESSAGE_SIZE] };
         let mut total_bytes = 0;
 
         loop {
-            let bytes_read = self.read(&mut read_buffer)?;
+            let bytes_read = self.read(&mut read_buffer[total_bytes..])?;
 
             if bytes_read > 0 {
                 total_bytes += bytes_read;
 
-                if read_buffer.len() > 1 && read_buffer.last().is_some_and(|&byte| byte == b'\0') {
+                println!(
+                    "{:?}",
+                    std::str::from_utf8(&read_buffer[1..total_bytes - 1])
+                );
+                if bytes_read > 1 && read_buffer[total_bytes - 1] == b'\0' {
                     break;
                 }
             } else {
@@ -131,12 +134,12 @@ impl DeviceBus {
         // The message without the null bytes at the start and end.
         let msg_slice = &read_buffer[1..total_bytes - 1];
 
-        let response = serde_json::from_slice(msg_slice).map_err(Error::from)?;
-
-        Ok(response)
+        serde_json::from_slice::<Response<T>>(msg_slice)
+            .map_err(Error::from)?
+            .into()
     }
 
-    fn read(&self, buf: &mut ArrayVec<u8, MAX_MESSAGE_SIZE>) -> Result<usize> {
+    fn read(&self, buf: &mut [u8]) -> Result<usize> {
         {
             let mut poll = self.0.poll.borrow_mut();
             let mut events = self.0.events.borrow_mut();

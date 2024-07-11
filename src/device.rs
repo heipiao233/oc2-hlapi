@@ -4,7 +4,6 @@
 use crate::bus::DeviceBus;
 use crate::call::Call;
 use crate::error::Result;
-use crate::response::Return;
 use crate::types::{Direction, ImportFileInfo, RobotActionResult, RotationDirection};
 use erased_serde::Serialize as ErasedSerialize;
 use serde::de::DeserializeOwned;
@@ -94,10 +93,10 @@ macro_rules! device {
 }
 
 // This function is simply here to cut down on possible code duplication, since each
-// call which shares the same return type can share the same monomorphized version of this 
+// call which shares the same return type can share the same monomorphized version of this
 // function.
 #[doc(hidden)]
-#[inline(never)] 
+#[inline(never)]
 pub fn invoke<R: DeserializeOwned + 'static>(
     id: Uuid,
     bus: &DeviceBus,
@@ -106,12 +105,7 @@ pub fn invoke<R: DeserializeOwned + 'static>(
 ) -> Result<R> {
     let call = Call::invoke(id, method_name, params);
 
-    let result = bus.call(call)?.into();
-
-    match result {
-        Ok(Return(ret)) => Ok(ret),
-        Err(string) => Err(string.into()),
-    }
+    bus.call(call).map(|r| r.0)
 }
 
 pub trait RpcDevice {
