@@ -1,9 +1,16 @@
 // TODO: Better documentation. The documentation is very badly written at the moment because I was
 // trying to get the point across. Needs rewording and examples.
 
-use crate::{prelude::DeviceBus, types::*};
+use crate::bus::DeviceBus;
+use crate::call::Call;
+use crate::error::Result;
+use crate::response::Return;
+use crate::types::{Direction, ImportFileInfo, RobotActionResult, RotationDirection};
+use erased_serde::Serialize as ErasedSerialize;
 use serde::de::DeserializeOwned;
+use uuid::Uuid;
 
+// TODO: Turn this into a procedural macro
 macro_rules! interface {
     (
         $(#[$outer:meta])*
@@ -12,7 +19,7 @@ macro_rules! interface {
 
             $(
                 $(#[$inner:meta])*
-                fn $fn_name:ident $(<$($generic:ident : $generic_bound:ident),+ $(,)?>)? (&self $(, $($param_name:ident : $param_ty:ty),* $(,)?)?) $(-> $ret_ty:ty)?;
+                fn $fn_name:ident $(<$($generic:ident),+ $(,)?>)? (&self $(, $($param_name:ident : $param_ty:ty),* $(,)?)?) $(-> $ret_ty:ty)?;
             )*
         }
     ) => {
@@ -26,12 +33,14 @@ macro_rules! interface {
             $(
                 $(#[$inner])*
                 #[allow(unused_parens)]
-                fn $fn_name$(<$($generic: $generic_bound),+>)?(&self, $($($param_name: $param_ty),*)?) -> $crate::error::Result<($($ret_ty)?)>;
+                fn $fn_name$(<$($generic),+>)?(&self, $($($param_name: $param_ty),*)?) -> $crate::error::Result<($($ret_ty)?)>
+                    where ($($ret_ty)?): ::serde::de::DeserializeOwned + 'static;
             )*
         }
     };
 }
 
+// TODO: Turn this into a procedural macro
 #[macro_export]
 macro_rules! device {
     (
@@ -43,7 +52,7 @@ macro_rules! device {
             impl $trait_name:ident {
                 $(
                     #[device(invoke = $invoke_name:literal)]
-                    fn $fn_name:ident (&self $(, $($param_name:ident : $param_ty:ty),* $(,)?)?) $(-> $ret_ty:ty)?;
+                    fn $fn_name:ident $(<$($generic:ident),+ $(,)?>)? (&self $(, $($param_name:ident : $param_ty:ty),* $(,)?)?) $(-> $ret_ty:ty)?;
                 )+
             }
         )+
@@ -73,26 +82,10 @@ macro_rules! device {
                 $(
                     #[allow(non_snake_case)]
                     #[allow(unused_parens)]
-                    fn $fn_name(&self, $($($param_name: $param_ty),*)?) -> $crate::error::Result<($($ret_ty)?)> {
-                        let method_name = $invoke_name;
-                        let dyn_parameters = [$($(&$param_name as &dyn ::erased_serde::Serialize),*)?];
-
-                        let call = $crate::call::RpcCall::<$crate::call::InvokeCall<'_, ($($ret_ty)?)>>::invoke(
-                            self.0,
-                            method_name,
-                            &dyn_parameters
-                        );
-
-                        let result = self.1
-                        .call::<$crate::call::InvokeCall<'_, ($($ret_ty)?)>>(call)?
-                        .into();
-
-                        match result {
-                            ::core::result::Result::Ok($crate::response::InvokeResponse(ret)) => ::core::result::Result::Ok(ret),
-                            ::core::result::Result::Err(string) => {
-                                ::core::result::Result::Err(string.into())
-                            },
-                        }
+                    fn $fn_name$(<$($generic),+>)?(&self, $($($param_name: $param_ty),*)?) -> $crate::error::Result<($($ret_ty)?)>
+                        where ($($ret_ty)?): ::serde::de::DeserializeOwned + 'static
+                    {
+                        $crate::device::invoke(self.0, &self.1, $invoke_name, &[$($(&$param_name as &dyn ::erased_serde::Serialize),*)?])
                     }
                 )+
             }
@@ -100,11 +93,32 @@ macro_rules! device {
     };
 }
 
+// This function is simply here to cut down on possible code duplication, since each
+// call which shares the same return type can share the same monomorphized version of this 
+// function.
+#[doc(hidden)]
+#[inline(never)] 
+pub fn invoke<R: DeserializeOwned + 'static>(
+    id: Uuid,
+    bus: &DeviceBus,
+    method_name: &str,
+    params: &[&dyn ErasedSerialize],
+) -> Result<R> {
+    let call = Call::invoke(id, method_name, params);
+
+    let result = bus.call(call)?.into();
+
+    match result {
+        Ok(Return(ret)) => Ok(ret),
+        Err(string) => Err(string.into()),
+    }
+}
+
 pub trait RpcDevice {
     const IDENTIFIER: &'static str;
 
-    fn new(id: uuid::Uuid, bus: &DeviceBus) -> Self;
-    fn id(&self) -> uuid::Uuid;
+    fn new(id: Uuid, bus: &DeviceBus) -> Self;
+    fn id(&self) -> Uuid;
     fn bus(&self) -> &DeviceBus;
 }
 
@@ -139,7 +153,7 @@ interface! {
 
         /// Returns a type which can be deserialized from JSON which represents the current
         /// Minecraft IItemStack in the specified slot.
-        fn get_item_stack_in_slot<T: DeserializeOwned>(&self, slot: i32) -> T;
+        fn get_item_stack_in_slot<T>(&self, slot: i32) -> T;
     }
 }
 
@@ -256,7 +270,7 @@ interface! {
         fn get_energy_stored(&self) -> i32;
 
         /// Returns the maximum possible energy that a robot can store.
-        fn get_max_energy_stored(&self) -> i32;
+        fn get_energy_capacity(&self) -> i32;
 
         /// Returns the index of the currently active slot.
         fn get_selected_slot(&self) -> i32;
@@ -265,7 +279,15 @@ interface! {
         fn set_selected_slot(&self, slot: i32);
 
         /// Returns information about the item in the given slot.
-        fn get_stack_in_slot<T: DeserializeOwned>(&self, slot: i32) -> T;
+        fn get_stack_in_slot<T>(&self, slot: i32) -> T;
+
+        /// Attempts to queue an action which moves the robot in the given direction. Returns true
+        /// if the action was successfully queued.
+        fn queue_move(&self, direction: Direction) -> bool;
+
+        /// Attempts to queue an action which turns the robot in the given direction. Returns true
+        /// if the action was successfully queued.
+        fn queue_turn(&self, direction: RotationDirection) -> bool;
 
         /// Returns the ID of the previously performed action.
         fn get_last_action_id(&self) -> i32;
@@ -275,24 +297,6 @@ interface! {
 
         /// Returns the state of a robot's action with a given ID.
         fn get_action_result(&self, id: i32) -> RobotActionResult;
-
-        /// Attempts to move in the given direction without blocking.
-        fn move_async(&self, direction: Direction);
-
-        /// Attempts to turn in the given direction without blocking.
-        fn turn_async(&self, direction: RotationDirection);
-
-        /// Attempts to move a robot in the given direction, blocking until the action has
-        /// completed. Returns whether the operation completed successfully.
-        fn move_wait(&self, direction: Direction) -> bool;
-
-        /// Attempts to turn a robot in the given direction, blocking until the action has
-        /// completed. Returns whether the operation completed successfully.
-        fn turn_wait(&self, direction: RotationDirection) -> bool;
-
-        /// Waits for the action with the given ID to complete. Returns whether the operation
-        /// completed successfully.
-        fn wait_for_action(&self, action: i32) -> bool;
     }
 }
 
@@ -396,5 +400,42 @@ device! {
 
         #[device(invoke = "repair")]
         fn repair(&self) -> bool;
+    }
+}
+
+device! {
+    #[device(identifier = "robot")]
+    pub struct RobotDevice;
+
+    impl RobotInterface {
+        #[device(invoke = "getEnergyStored")]
+        fn get_energy_stored(&self) -> i32;
+
+        #[device(invoke = "getEnergyCapacity")]
+        fn get_energy_capacity(&self) -> i32;
+
+        #[device(invoke = "getSelectedSlot")]
+        fn get_selected_slot(&self) -> i32;
+
+        #[device(invoke = "setSelectedSlot")]
+        fn set_selected_slot(&self, slot: i32);
+
+        #[device(invoke = "getStackInSlot")]
+        fn get_stack_in_slot<T>(&self, slot: i32) -> T;
+
+        #[device(invoke = "move")]
+        fn queue_move(&self, direction: Direction) -> bool;
+
+        #[device(invoke = "turn")]
+        fn queue_turn(&self, direction: RotationDirection) -> bool;
+
+        #[device(invoke = "getLastActionId")]
+        fn get_last_action_id(&self) -> i32;
+
+        #[device(invoke = "getQueuedActionCount")]
+        fn get_queued_action_count(&self) -> i32;
+
+        #[device(invoke = "getActionResult")]
+        fn get_action_result(&self, id: i32) -> RobotActionResult;
     }
 }
