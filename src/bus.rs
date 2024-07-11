@@ -37,6 +37,9 @@ impl DeviceBus {
         let fd = bus.as_raw_fd();
         let bus_token = Token(NEXT_TOKEN.fetch_add(1, Ordering::Relaxed));
 
+        // Sets options to not echo back the input to the device bus, and immediately applies that
+        // change. Without this, writing to the device bus will just hang the applicaton.
+        // Taken from https://docs.rs/miku-rpc/0.1.4/src/miku_rpc/bus.rs.html#34-37
         let mut termios = Termios::from_fd(fd)?;
         termios::cfmakeraw(&mut termios);
         termios.c_lflag &= !termios::ECHO;

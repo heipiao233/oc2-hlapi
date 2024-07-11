@@ -1,6 +1,6 @@
 [package]
 name = "oc2-hlapi"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Factorial <27factorial@gmail.com>"]
 categories = ["api-bindings", "embedded", "os"]
 description = "Rust bindings for the OpenComputers II Minecraft mod's HLAPI"
