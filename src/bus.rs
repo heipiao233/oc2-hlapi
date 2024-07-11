@@ -119,10 +119,6 @@ impl DeviceBus {
             if bytes_read > 0 {
                 total_bytes += bytes_read;
 
-                println!(
-                    "{:?}",
-                    std::str::from_utf8(&read_buffer[1..total_bytes - 1])
-                );
                 if bytes_read > 1 && read_buffer[total_bytes - 1] == b'\0' {
                     break;
                 }
