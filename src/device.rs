@@ -175,7 +175,7 @@ interface! {
     pub trait SoundInterface {
         /// Returns a slice of sound effect names matching the given name. The length of the slice
         /// is limited, so very generic names may result in a truncated list.
-        fn find_sound(&self, name: &str) -> Box<[String]>;
+        fn find_sound(&self, name: &str) -> Box<[Box<str>]>;
 
         /// Plays the sound effect matching the given name at the given volume and pitch.
         fn play_sound(&self, name: &str, volume: f64, pitch: f64);
@@ -197,7 +197,7 @@ interface! {
         /// containing the portion of the file that has been read. Returns None when the file has
         /// been fully imported. If the byte slice is empty, it means that the device is not ready
         /// to import the file.
-        fn read_import_file(&self) -> Option<Vec<u8>>;
+        fn read_import_file(&self) -> Option<Box<[u8]>>;
 
         /// Prompts the user to select a path where a file with the given name should be exported.
         fn begin_export_file(&self, name: &str);
@@ -320,7 +320,7 @@ device! {
 
     impl SoundInterface {
         #[device(invoke = "findSound")]
-        fn find_sound(&self, name: &str) -> Box<[String]>;
+        fn find_sound(&self, name: &str) -> Box<[Box<str>]>;
 
         #[device(invoke = "playSound")]
         fn play_sound(&self, name: &str, volume: f64, pitch: f64);
@@ -340,7 +340,7 @@ device! {
         fn begin_import_file(&self) -> Option<ImportFileInfo>;
 
         #[device(invoke = "readImportFile")]
-        fn read_import_file(&self) -> Option<Vec<u8>>;
+        fn read_import_file(&self) -> Option<Box<[u8]>>;
 
         #[device(invoke = "beginExportFile")]
         fn begin_export_file(&self, name: &str);

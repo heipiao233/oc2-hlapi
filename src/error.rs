@@ -16,7 +16,7 @@ pub enum Error {
     #[error("JSON error: {0}")]
     Json(serde_json::Error),
     #[error("HLAPI error: {0}")]
-    Api(String),
+    Api(Box<str>),
 }
 
 impl Error {
@@ -44,9 +44,15 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<Box<str>> for Error {
+    fn from(value: Box<str>) -> Self {
+        Self::Api(value)
+    }
+}
+
 impl From<String> for Error {
     fn from(value: String) -> Self {
-        Self::Api(value)
+        Self::from(value.into_boxed_str())
     }
 }
 

@@ -15,10 +15,10 @@ pub enum Response<T: ApiCall> {
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Deserialize)]
-pub struct List(pub Vec<DeviceDescriptor>);
+pub struct List(pub Box<[DeviceDescriptor]>);
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default, Deserialize)]
-pub struct Methods(pub Vec<MethodDescriptor>);
+pub struct Methods(pub Box<[MethodDescriptor]>);
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Return<R>(pub R);
