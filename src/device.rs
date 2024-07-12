@@ -7,6 +7,8 @@ use crate::error::Result;
 use crate::types::{Direction, ImportFileInfo, RobotActionResult, RotationDirection};
 use erased_serde::Serialize as ErasedSerialize;
 use serde::de::DeserializeOwned;
+use std::thread::sleep;
+use std::time::Duration;
 use uuid::Uuid;
 
 // TODO: Turn this into a procedural macro
@@ -431,5 +433,57 @@ device! {
 
         #[device(invoke = "getActionResult")]
         fn get_action_result(&self, id: i32) -> RobotActionResult;
+    }
+}
+
+impl RobotDevice {
+    const WAIT_DURATION: Duration = Duration::from_millis(100);
+
+    /// Attempts to queue an action which moves the robot in the given direction, waiting until the
+    /// action can be successfully queued.
+    pub fn wait_queue_move(&self, direction: Direction) -> Result<()> {
+        while !self.queue_move(direction)? {
+            sleep(Self::WAIT_DURATION)
+        }
+
+        Ok(())
+    }
+
+    /// Attempts to queue an action which moves the robot in the given direction, waiting until the
+    /// action has completed.
+    pub fn wait_move(&self, direction: Direction) -> Result<bool> {
+        self.wait_queue_move(direction)?;
+        self.wait_for_last_action()
+    }
+
+    /// Attempts to queue an action which turns the robot in the given direction, waiting until the
+    /// action can be successfully queued.
+    pub fn wait_queue_turn(&self, direction: RotationDirection) -> Result<()> {
+        while !self.queue_turn(direction)? {
+            sleep(Self::WAIT_DURATION)
+        }
+
+        Ok(())
+    }
+
+    /// Attempts to queue an action which moves the robot in the given direction, waiting until the
+    /// action has completed.
+    pub fn wait_turn(&self, direction: RotationDirection) -> Result<bool> {
+        self.wait_queue_turn(direction)?;
+        self.wait_for_last_action()
+    }
+
+    /// Waits for the previous action to complete, returning whether the action completed 
+    /// successfully.
+    fn wait_for_last_action(&self) -> Result<bool> {
+        let id = self.get_last_action_id()?;
+
+        let mut result = self.get_action_result(id)?;
+        while result == RobotActionResult::Incomplete {
+            sleep(Self::WAIT_DURATION);
+            result = self.get_action_result(id)?;
+        }
+
+        Ok(result == RobotActionResult::Success)
     }
 }
