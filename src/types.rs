@@ -67,6 +67,7 @@ pub enum RotationDirection {
 
 /// The state of a robot's current action.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum RobotActionResult {
     Incomplete,
     Success,
