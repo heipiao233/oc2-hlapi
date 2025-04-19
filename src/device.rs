@@ -4,7 +4,7 @@
 use crate::bus::DeviceBus;
 use crate::call::Call;
 use crate::error::Result;
-use crate::types::{Direction, ImportFileInfo, RobotActionResult, RotationDirection};
+use crate::types::{Direction, ImportFileInfo, RobotActionResult, MoveDirection, RotationDirection};
 use erased_serde::Serialize as ErasedSerialize;
 use serde::de::DeserializeOwned;
 use std::thread::sleep;
@@ -279,7 +279,7 @@ interface! {
 
         /// Attempts to queue an action which moves the robot in the given direction. Returns true
         /// if the action was successfully queued.
-        fn queue_move(&self, direction: Direction) -> bool;
+        fn queue_move(&self, direction: MoveDirection) -> bool;
 
         /// Attempts to queue an action which turns the robot in the given direction. Returns true
         /// if the action was successfully queued.
@@ -420,7 +420,7 @@ device! {
         fn get_stack_in_slot<T>(&self, slot: i32) -> T;
 
         #[device(invoke = "move")]
-        fn queue_move(&self, direction: Direction) -> bool;
+        fn queue_move(&self, direction: MoveDirection) -> bool;
 
         #[device(invoke = "turn")]
         fn queue_turn(&self, direction: RotationDirection) -> bool;
@@ -441,7 +441,7 @@ impl RobotDevice {
 
     /// Attempts to queue an action which moves the robot in the given direction, waiting until the
     /// action can be successfully queued.
-    pub fn wait_queue_move(&self, direction: Direction) -> Result<()> {
+    pub fn wait_queue_move(&self, direction: MoveDirection) -> Result<()> {
         while !self.queue_move(direction)? {
             sleep(Self::WAIT_DURATION)
         }
@@ -451,7 +451,7 @@ impl RobotDevice {
 
     /// Attempts to queue an action which moves the robot in the given direction, waiting until the
     /// action has completed.
-    pub fn wait_move(&self, direction: Direction) -> Result<bool> {
+    pub fn wait_move(&self, direction: MoveDirection) -> Result<bool> {
         self.wait_queue_move(direction)?;
         self.wait_for_last_action()
     }
@@ -473,7 +473,7 @@ impl RobotDevice {
         self.wait_for_last_action()
     }
 
-    /// Waits for the previous action to complete, returning whether the action completed 
+    /// Waits for the previous action to complete, returning whether the action completed
     /// successfully.
     fn wait_for_last_action(&self) -> Result<bool> {
         let id = self.get_last_action_id()?;

@@ -57,6 +57,15 @@ pub enum Direction {
     Right,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MoveDirection {
+    Upward,
+    Downward,
+    Forward,
+    Backward,
+}
+
 /// A rotation direction.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
